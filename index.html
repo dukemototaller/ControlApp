@@ -821,6 +821,13 @@
   const pinDots = Array.from({length:6}, (_,i) => document.getElementById('d'+i));
   const pinErrorEl = document.getElementById('pin-error');
 
+  // Firestore listener handles + config — declared before checkUnlocked()
+  // runs, since a returning user (PIN already saved) triggers initApp()
+  // immediately and synchronously on load.
+  let unsubOrdenes = null;
+  let unsubCitas = null;
+  const LISTENER_TIMEOUT_MS = 8000;
+
   function checkUnlocked() {
     if (localStorage.getItem('ct_unlocked') === '1') {
       pinScreen.classList.add('hidden');
@@ -1425,9 +1432,6 @@
   // ──────────────────────────────────────────────
   //  INIT APP — Firestore listeners
   // ──────────────────────────────────────────────
-  let unsubOrdenes = null;
-  let unsubCitas = null;
-  const LISTENER_TIMEOUT_MS = 8000;
 
   // Generic listener with timeout + "Reintentar" fallback.
   // If Firestore never calls back (bad network, blocked domain,
