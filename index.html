@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Taller" />
+  <meta name="theme-color" content="#F2F2F7" />
+  <title>Control Taller</title>
+  <link rel="manifest" href="manifest.json" />
+
+  <style>
+    /* ─── Reset & Base ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #007AFF;
+      --red: #FF3B30;
+      --green: #34C759;
+      --orange: #FF9500;
+      --bg: #F2F2F7;
+      --bg2: #FFFFFF;
+      --bg3: #F2F2F7;
+      --label: #000000;
+      --label2: #3C3C43CC;
+      --label3: #3C3C4399;
+      --separator: #C6C6C8;
+      --fill: #78788033;
+      --radius: 13px;
+      --radius-sm: 10px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+      color: var(--label);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* ─── PIN Screen ─── */
+    #pin-screen {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0;
+      padding-bottom: calc(var(--safe-bottom) + 16px);
+    }
+    #pin-screen.hidden { display: none; }
+    .pin-logo {
+      width: 72px; height: 72px; border-radius: 18px;
+      background: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; margin-bottom: 24px;
+      box-shadow: 0 4px 20px #007AFF44;
+    }
+    .pin-title { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .pin-subtitle { font-size: 15px; color: var(--label2); margin-bottom: 36px; }
+    .pin-dots { display: flex; gap: 18px; margin-bottom: 32px; }
+    .pin-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid var(--separator);
+      background: transparent;
+      transition: all 0.15s ease;
+    }
+    .pin-dot.filled { background: var(--label); border-color: var(--label); }
+    .pin-dot.error { background: var(--red); border-color: var(--red); }
+    .pin-error { color: var(--red); font-size: 14px; height: 18px; margin-bottom: 12px; text-align:center; }
+
+    .pin-keypad {
+      display: grid; grid-template-columns: repeat(3, 72px);
+      grid-template-rows: repeat(4, 72px);
+      gap: 12px;
+    }
+    .pin-key {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--bg2);
+      border: none; cursor: pointer;
+      font-size: 24px; font-weight: 400;
+      color: var(--label);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      line-height: 1;
+      box-shadow: 0 1px 4px #0001;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.1s;
+      user-select: none;
+    }
+    .pin-key:active { background: var(--separator); }
+    .pin-key .key-sub { font-size: 9px; font-weight: 500; letter-spacing: 1.5px; color: var(--label2); margin-top: 2px; }
+    .pin-key.del-key { background: transparent; box-shadow: none; font-size: 20px; }
+    .pin-key.empty-key { background: transparent; box-shadow: none; pointer-events: none; }
+
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.4s ease; }
+
+    /* ─── App Shell ─── */
+    #app { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+    #app.hidden { display: none; }
+
+    /* ─── Navigation Bar ─── */
+    .nav-bar {
+      padding-top: var(--safe-top);
+      background: rgba(242,242,247,0.85);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 0.5px solid var(--separator);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .nav-bar-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px 10px;
+      min-height: 50px;
+    }
+    .nav-title { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+    .nav-large-title {
+      font-size: 34px; font-weight: 700; letter-spacing: -0.5px;
+      padding: 4px 20px 12px;
+    }
+
+    /* ─── Tab Content ─── */
+    .tab-content {
+      flex: 1; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(90px + var(--safe-bottom));
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ─── Section Groups (iOS Settings-style) ─── */
+    .section-group {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      margin: 0 16px 16px;
+      overflow: hidden;
+    }
+    .section-header {
+      font-size: 13px; font-weight: 400;
+      color: var(--label2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 20px 16px 6px;
+    }
+
+    /* ─── Tab Bar ─── */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(242,242,247,0.88);
+      backdrop-filter: saturate(180%) blur(24px);
+      -webkit-backdrop-filter: saturate(180%) blur(24px);
+      border-top: 0.5px solid var(--separator);
+      display: flex; align-items: stretch;
+      padding-bottom: var(--safe-bottom);
+      z-index: 100;
+    }
+    .tab-btn {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px; padding: 8px 4px 4px;
+      border: none; background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      color: var(--label3);
+      transition: color 0.15s;
+      min-height: 50px;
+    }
+    .tab-btn.active { color: var(--blue); }
+    .tab-btn svg { width: 24px; height: 24px; }
+    .tab-btn span { font-size: 10px; font-weight: 500; letter-spacing: -0.1px; }
+
+    /* ─── Order / Cita Cards ─── */
+    .list-empty {
+      text-align: center; color: var(--label3);
+      font-size: 15px; padding: 60px 20px;
+    }
+    .list-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .list-empty strong { display: block; font-size: 18px; font-weight: 600; color: var(--label2); margin-bottom: 4px; }
+
+    .order-card {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      margin: 0 16px 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px #0000000D;
+    }
+    .order-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 10px;
+      border-bottom: 0.5px solid var(--separator);
+    }
+    .order-folio {
+      font-size: 13px; font-weight: 600;
+      color: var(--blue); letter-spacing: 0.3px;
+    }
+    .order-date { font-size: 12px; color: var(--label3); }
+    .order-card-body { padding: 12px 16px; }
+    .order-moto { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+    .order-placa {
+      display: inline-block;
+      background: var(--fill);
+      border-radius: 6px; padding: 2px 8px;
+      font-size: 13px; font-weight: 500;
+      color: var(--label2);
+      margin: 4px 0 8px;
+    }
+    .order-fallas { font-size: 14px; color: var(--label2); line-height: 1.5; }
+    .order-photos { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .order-photo {
+      width: 72px; height: 72px; border-radius: 8px;
+      object-fit: cover; background: var(--bg);
+      cursor: pointer;
+    }
+    .order-card-footer {
+      padding: 10px 16px;
+      border-top: 0.5px solid var(--separator);
+      display: flex; justify-content: flex-end;
+    }
+    .btn-delete {
+      background: none; border: none;
+      color: var(--red); font-size: 14px; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      padding: 4px 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-delete svg { width: 16px; height: 16px; }
+
+    .cita-card {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      margin: 0 16px 12px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 4px #0000000D;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .cita-avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: var(--blue);
+      color: white; font-size: 18px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cita-info { flex: 1; }
+    .cita-name { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+    .cita-tel { font-size: 13px; color: var(--blue); margin-top: 2px; }
+    .cita-desc { font-size: 14px; color: var(--label2); margin-top: 4px; line-height: 1.45; }
+    .cita-date { font-size: 12px; color: var(--label3); margin-top: 4px; }
+    .cita-card-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+    /* ─── FAB ─── */
+    .fab {
+      position: fixed;
+      right: 20px;
+      bottom: calc(66px + var(--safe-bottom) + 16px);
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--blue);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px #007AFF55;
+      z-index: 50;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .fab:active { transform: scale(0.93); box-shadow: 0 2px 8px #007AFF44; }
+    .fab svg { width: 28px; height: 28px; color: white; }
+    .fab.hidden { display: none; }
+
+    /* ─── Modal ─── */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: flex-end;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: all; }
+    .modal-sheet {
+      width: 100%; background: var(--bg);
+      border-radius: 16px 16px 0 0;
+      max-height: 92dvh; display: flex; flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
+      padding-bottom: var(--safe-bottom);
+    }
+    .modal-backdrop.open .modal-sheet { transform: translateY(0); }
+    .modal-handle {
+      width: 36px; height: 4px; border-radius: 2px;
+      background: var(--separator);
+      margin: 10px auto 4px;
+      flex-shrink: 0;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 16px 14px; flex-shrink: 0;
+      border-bottom: 0.5px solid var(--separator);
+    }
+    .modal-title { font-size: 17px; font-weight: 600; }
+    .modal-btn-text {
+      background: none; border: none;
+      font-size: 17px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .modal-btn-text.cancel { color: var(--label2); }
+    .modal-btn-text.save { color: var(--blue); font-weight: 600; }
+    .modal-scroll { overflow-y: auto; padding: 16px; flex: 1; }
+
+    /* ─── Form Fields ─── */
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      font-size: 13px; font-weight: 500;
+      color: var(--label2); margin-bottom: 6px; display: block;
+    }
+    .form-input, .form-textarea {
+      width: 100%; background: var(--bg2);
+      border: 1px solid var(--separator);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 16px; color: var(--label);
+      font-family: inherit;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--blue); }
+    .form-textarea { resize: none; min-height: 90px; line-height: 1.5; }
+
+    /* ─── Photo Upload ─── */
+    .photos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .photo-slot {
+      aspect-ratio: 4/3; border-radius: var(--radius-sm);
+      background: var(--bg);
+      border: 1.5px dashed var(--separator);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer; overflow: hidden;
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.15s;
+    }
+    .photo-slot:hover { border-color: var(--blue); }
+    .photo-slot img {
+      width: 100%; height: 100%; object-fit: cover;
+      position: absolute; inset: 0;
+    }
+    .photo-slot svg { width: 32px; height: 32px; color: var(--label3); }
+    .photo-slot span { font-size: 12px; color: var(--label3); margin-top: 6px; }
+    .photo-slot input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; width: 100%; height: 100%;
+      cursor: pointer;
+    }
+
+    /* ─── Settings ─── */
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px;
+    }
+    .settings-row + .settings-row { border-top: 0.5px solid var(--separator); }
+    .settings-row-left { display: flex; align-items: center; gap: 12px; }
+    .settings-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .settings-label { font-size: 17px; }
+    .settings-value { font-size: 15px; color: var(--label3); }
+    .settings-chevron { color: var(--separator); }
+    .status-badge {
+      font-size: 12px; font-weight: 600;
+      padding: 3px 10px; border-radius: 10px;
+      letter-spacing: 0.3px;
+    }
+    .status-badge.online { background: #34C75922; color: var(--green); }
+    .status-badge.offline { background: #FF3B3022; color: var(--red); }
+
+    /* ─── Loading Spinner ─── */
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid var(--separator);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 40px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Toast ─── */
+    #toast {
+      position: fixed; bottom: calc(80px + var(--safe-bottom) + 16px);
+      left: 50%; transform: translateX(-50%) translateY(20px);
+      background: rgba(50,50,50,0.92);
+      color: white; padding: 10px 20px;
+      border-radius: 20px; font-size: 14px; font-weight: 500;
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 300; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ─── Confirm Dialog ─── */
+    .confirm-overlay {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .confirm-overlay.open { opacity: 1; pointer-events: all; }
+    .confirm-box {
+      background: var(--bg2);
+      border-radius: 14px; width: 100%; max-width: 280px;
+      overflow: hidden;
+      transform: scale(0.95);
+      transition: transform 0.2s;
+    }
+    .confirm-overlay.open .confirm-box { transform: scale(1); }
+    .confirm-box-body { padding: 20px; text-align: center; }
+    .confirm-box-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+    .confirm-box-msg { font-size: 13px; color: var(--label2); line-height: 1.4; }
+    .confirm-box-actions { border-top: 0.5px solid var(--separator); display: flex; }
+    .confirm-box-btn {
+      flex: 1; padding: 14px; border: none; background: none;
+      font-size: 17px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .confirm-box-btn + .confirm-box-btn { border-left: 0.5px solid var(--separator); }
+    .confirm-box-btn.destructive { color: var(--red); }
+    .confirm-box-btn.confirm-cancel { color: var(--blue); }
+
+    /* ─── Image Viewer ─── */
+    .img-viewer {
+      position: fixed; inset: 0; z-index: 500;
+      background: #000;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .img-viewer.open { opacity: 1; pointer-events: all; }
+    .img-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .img-viewer-close {
+      position: absolute; top: calc(var(--safe-top) + 16px); right: 20px;
+      background: rgba(255,255,255,0.2);
+      border: none; color: white; width: 36px; height: 36px;
+      border-radius: 50%; font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ─── Scrollbar hide ─── */
+    .tab-content::-webkit-scrollbar,
+    .modal-scroll::-webkit-scrollbar { display: none; }
+    .tab-content, .modal-scroll { scrollbar-width: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ PIN SCREEN ═══════════════════════════════ -->
+<div id="pin-screen">
+  <div class="pin-logo">🔧</div>
+  <div class="pin-title">Control Taller</div>
+  <div class="pin-subtitle">Ingresa tu PIN de acceso</div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="d0"></div>
+    <div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div>
+    <div class="pin-dot" id="d3"></div>
+    <div class="pin-dot" id="d4"></div>
+    <div class="pin-dot" id="d5"></div>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+  <div class="pin-keypad">
+    <button class="pin-key" data-n="1">1</button>
+    <button class="pin-key" data-n="2">2<span class="key-sub">ABC</span></button>
+    <button class="pin-key" data-n="3">3<span class="key-sub">DEF</span></button>
+    <button class="pin-key" data-n="4">4<span class="key-sub">GHI</span></button>
+    <button class="pin-key" data-n="5">5<span class="key-sub">JKL</span></button>
+    <button class="pin-key" data-n="6">6<span class="key-sub">MNO</span></button>
+    <button class="pin-key" data-n="7">7<span class="key-sub">PQRS</span></button>
+    <button class="pin-key" data-n="8">8<span class="key-sub">TUV</span></button>
+    <button class="pin-key" data-n="9">9<span class="key-sub">WXYZ</span></button>
+    <button class="pin-key empty-key"></button>
+    <button class="pin-key" data-n="0">0</button>
+    <button class="pin-key del-key" id="pin-del">⌫</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ APP SHELL ═══════════════════════════════ -->
+<div id="app" class="hidden">
+
+  <!-- Nav Bar -->
+  <div class="nav-bar" id="nav-bar">
+    <div class="nav-bar-inner">
+      <div></div>
+      <div class="nav-title" id="nav-title">Órdenes</div>
+      <div></div>
+    </div>
+    <div class="nav-large-title" id="nav-large-title">Órdenes</div>
+  </div>
+
+  <!-- Tab Contents -->
+  <div class="tab-content" id="tab-content">
+
+    <!-- TAB: ÓRDENES -->
+    <div class="tab-pane active" id="tab-ordenes">
+      <div id="ordenes-list"><div class="spinner"></div></div>
+    </div>
+
+    <!-- TAB: CITAS -->
+    <div class="tab-pane" id="tab-citas">
+      <div id="citas-list"><div class="spinner"></div></div>
+    </div>
+
+    <!-- TAB: CONFIGURACIÓN -->
+    <div class="tab-pane" id="tab-config">
+      <div class="section-header">Aplicación</div>
+      <div class="section-group">
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#007AFF22;">🔧</div>
+            <div class="settings-label">Control Taller</div>
+          </div>
+          <div class="settings-value">v1.0</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#34C75922;">🌐</div>
+            <div class="settings-label">Conexión</div>
+          </div>
+          <span class="status-badge online" id="conn-badge">En línea</span>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#FF950022;">☁️</div>
+            <div class="settings-label">Base de datos</div>
+          </div>
+          <div class="settings-value">Firestore</div>
+        </div>
+      </div>
+      <div class="section-header">Sesión</div>
+      <div class="section-group">
+        <div class="settings-row" id="logout-btn" style="cursor:pointer;">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#FF3B3022;">🔒</div>
+            <div class="settings-label" style="color:var(--red);">Cerrar Sesión</div>
+          </div>
+          <svg class="settings-chevron" width="9" height="15" viewBox="0 0 9 15" fill="none">
+            <path d="M1 1.5L7.5 7.5L1 13.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="section-header">Acerca de</div>
+      <div class="section-group">
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#5AC8FA22;">📱</div>
+            <div class="settings-label">Soporte offline</div>
+          </div>
+          <div class="settings-value">Activo</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-left">
+            <div class="settings-icon" style="background:#AF52DE22;">🖼️</div>
+            <div class="settings-label">Compresión fotos</div>
+          </div>
+          <div class="settings-value">1200px · 60%</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="ordenes" id="tb-ordenes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+        <line x1="9" y1="17" x2="12" y2="17"/>
+      </svg>
+      <span>Órdenes</span>
+    </button>
+    <button class="tab-btn" data-tab="citas" id="tb-citas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span>Citas</span>
+    </button>
+    <button class="tab-btn" data-tab="config" id="tb-config">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+      <span>Ajustes</span>
+    </button>
+  </div>
+
+  <!-- FABs -->
+  <button class="fab" id="fab-ordenes">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+  <button class="fab hidden" id="fab-citas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+
+</div><!-- /app -->
+
+<!-- ═══════════════════════════════ MODAL: NUEVA ORDEN ═══════════════════════════════ -->
+<div class="modal-backdrop" id="modal-orden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-btn-text cancel" id="cancel-orden">Cancelar</button>
+      <span class="modal-title">Nueva Orden</span>
+      <button class="modal-btn-text save" id="save-orden">Guardar</button>
+    </div>
+    <div class="modal-scroll">
+      <div class="form-group">
+        <label class="form-label">Marca</label>
+        <input class="form-input" id="f-marca" placeholder="Ej. Honda, Yamaha…" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Línea</label>
+        <input class="form-input" id="f-linea" placeholder="Ej. CG125, FZ16…" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color</label>
+        <input class="form-input" id="f-color" placeholder="Ej. Rojo, Negro…" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Placas</label>
+        <input class="form-input" id="f-placas" placeholder="Ej. ABC-123" autocomplete="off" style="text-transform:uppercase;" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fallas / Trabajo a realizar</label>
+        <textarea class="form-textarea" id="f-fallas" placeholder="Describe las fallas o trabajos…" rows="4"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fotos de la motocicleta</label>
+        <div class="photos-grid">
+          <div class="photo-slot" id="slot-1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span>Foto 1</span>
+            <input type="file" accept="image/*" id="photo-1" />
+          </div>
+          <div class="photo-slot" id="slot-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span>Foto 2</span>
+            <input type="file" accept="image/*" id="photo-2" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MODAL: NUEVA CITA ═══════════════════════════════ -->
+<div class="modal-backdrop" id="modal-cita">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-btn-text cancel" id="cancel-cita">Cancelar</button>
+      <span class="modal-title">Nueva Cita</span>
+      <button class="modal-btn-text save" id="save-cita">Guardar</button>
+    </div>
+    <div class="modal-scroll">
+      <div class="form-group">
+        <label class="form-label">Nombre del cliente</label>
+        <input class="form-input" id="c-nombre" placeholder="Nombre completo" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teléfono</label>
+        <input class="form-input" id="c-tel" type="tel" placeholder="10 dígitos" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <textarea class="form-textarea" id="c-desc" placeholder="Motivo de la cita, tipo de servicio…" rows="4"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ CONFIRM DIALOG ═══════════════════════════════ -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-box-body">
+      <div class="confirm-box-title" id="confirm-title">Eliminar</div>
+      <div class="confirm-box-msg" id="confirm-msg">¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.</div>
+    </div>
+    <div class="confirm-box-actions">
+      <button class="confirm-box-btn confirm-cancel" id="confirm-cancel-btn">Cancelar</button>
+      <button class="confirm-box-btn destructive" id="confirm-ok-btn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ IMAGE VIEWER ═══════════════════════════════ -->
+<div class="img-viewer" id="img-viewer">
+  <img src="" id="img-viewer-img" alt="Foto" />
+  <button class="img-viewer-close" id="img-viewer-close">✕</button>
+</div>
+
+<!-- ═══════════════════════════════ TOAST ═══════════════════════════════ -->
+<div id="toast"></div>
+
+<!-- Hidden canvas for image compression -->
+<canvas id="compress-canvas" style="display:none;"></canvas>
+
+<!-- ═══════════════════════════════ SCRIPTS ═══════════════════════════════ -->
+<script type="module">
+  // ─── Firebase SDK ───
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+  import {
+    getFirestore, collection, addDoc, deleteDoc, doc,
+    onSnapshot, query, orderBy, getDocs,
+    enableIndexedDbPersistence
+  } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+  // ─── Config ───
+  const firebaseConfig = {
+    apiKey: "AIzaSyD4OnL3GZ7kREG10od_bZNurEQb3O71yso",
+    authDomain: "controlapp-51ed2.firebaseapp.com",
+    projectId: "controlapp-51ed2",
+    storageBucket: "controlapp-51ed2.firebasestorage.app",
+    messagingSenderId: "110483253620",
+    appId: "1:110483253620:web:1189503481688eb35fe421"
+  };
+  const cloudinaryConfig = {
+    cloudName: "drutrofhh",
+    uploadPreset: "ml_default"
+  };
+  const CORRECT_PIN = "240822";
+
+  // ─── Firebase init ───
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  enableIndexedDbPersistence(db).catch(err => console.warn("Persistence:", err.code));
+
+  // ─── Service Worker ───
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  }
+
+  // ──────────────────────────────────────────────
+  //  PIN SCREEN
+  // ──────────────────────────────────────────────
+  let pinBuffer = "";
+  const pinScreen = document.getElementById('pin-screen');
+  const appEl = document.getElementById('app');
+  const pinDots = Array.from({length:6}, (_,i) => document.getElementById('d'+i));
+  const pinErrorEl = document.getElementById('pin-error');
+
+  function checkUnlocked() {
+    if (localStorage.getItem('ct_unlocked') === '1') {
+      pinScreen.classList.add('hidden');
+      appEl.classList.remove('hidden');
+      initApp();
+    }
+  }
+  checkUnlocked();
+
+  function updateDots() {
+    pinDots.forEach((d,i) => {
+      d.classList.remove('filled','error');
+      if (i < pinBuffer.length) d.classList.add('filled');
+    });
+  }
+
+  function wrongPin() {
+    pinDots.forEach(d => { d.classList.remove('filled'); d.classList.add('error'); });
+    pinErrorEl.textContent = "PIN incorrecto. Inténtalo de nuevo.";
+    const dotsEl = document.getElementById('pin-dots');
+    dotsEl.classList.add('shake');
+    setTimeout(() => {
+      dotsEl.classList.remove('shake');
+      pinDots.forEach(d => d.classList.remove('error'));
+      pinErrorEl.textContent = "";
+    }, 800);
+    pinBuffer = "";
+    if (navigator.vibrate) navigator.vibrate([50,50,50]);
+  }
+
+  document.querySelectorAll('.pin-key[data-n]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (pinBuffer.length >= 6) return;
+      pinBuffer += btn.dataset.n;
+      updateDots();
+      if (pinBuffer.length === 6) {
+        setTimeout(() => {
+          if (pinBuffer === CORRECT_PIN) {
+            localStorage.setItem('ct_unlocked','1');
+            pinScreen.classList.add('hidden');
+            appEl.classList.remove('hidden');
+            initApp();
+          } else {
+            wrongPin();
+          }
+        }, 120);
+      }
+    });
+  });
+
+  document.getElementById('pin-del').addEventListener('click', () => {
+    pinBuffer = pinBuffer.slice(0,-1);
+    updateDots();
+    pinErrorEl.textContent = "";
+  });
+
+  // ──────────────────────────────────────────────
+  //  NAVIGATION
+  // ──────────────────────────────────────────────
+  const tabNames = { ordenes: "Órdenes", citas: "Citas", config: "Ajustes" };
+  let currentTab = "ordenes";
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-'+tab));
+    document.getElementById('nav-title').textContent = tabNames[tab];
+    document.getElementById('nav-large-title').textContent = tabNames[tab];
+    document.getElementById('fab-ordenes').classList.toggle('hidden', tab !== 'ordenes');
+    document.getElementById('fab-citas').classList.toggle('hidden', tab !== 'citas');
+    document.getElementById('tab-content').scrollTop = 0;
+  }
+
+  // ──────────────────────────────────────────────
+  //  MODALS
+  // ──────────────────────────────────────────────
+  function openModal(id) {
+    const m = document.getElementById(id);
+    m.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal(id) {
+    const m = document.getElementById(id);
+    m.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // Close modals on backdrop click
+  ['modal-orden','modal-cita'].forEach(id => {
+    document.getElementById(id).addEventListener('click', e => {
+      if (e.target === document.getElementById(id)) closeModal(id);
+    });
+  });
+
+  document.getElementById('fab-ordenes').addEventListener('click', () => {
+    resetOrdenForm();
+    openModal('modal-orden');
+  });
+  document.getElementById('fab-citas').addEventListener('click', () => {
+    resetCitaForm();
+    openModal('modal-cita');
+  });
+  document.getElementById('cancel-orden').addEventListener('click', () => closeModal('modal-orden'));
+  document.getElementById('cancel-cita').addEventListener('click', () => closeModal('modal-cita'));
+
+  // ──────────────────────────────────────────────
+  //  TOAST
+  // ──────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ──────────────────────────────────────────────
+  //  CONFIRM DIALOG
+  // ──────────────────────────────────────────────
+  let confirmCallback = null;
+  function showConfirm(title, msg, cb) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    confirmCallback = cb;
+    document.getElementById('confirm-overlay').classList.add('open');
+  }
+  document.getElementById('confirm-cancel-btn').addEventListener('click', () => {
+    document.getElementById('confirm-overlay').classList.remove('open');
+    confirmCallback = null;
+  });
+  document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+    document.getElementById('confirm-overlay').classList.remove('open');
+    if (confirmCallback) { confirmCallback(); confirmCallback = null; }
+  });
+
+  // ──────────────────────────────────────────────
+  //  IMAGE VIEWER
+  // ──────────────────────────────────────────────
+  function openImageViewer(src) {
+    document.getElementById('img-viewer-img').src = src;
+    document.getElementById('img-viewer').classList.add('open');
+  }
+  document.getElementById('img-viewer-close').addEventListener('click', () => {
+    document.getElementById('img-viewer').classList.remove('open');
+  });
+
+  // ──────────────────────────────────────────────
+  //  IMAGE COMPRESSION (Canvas)
+  // ──────────────────────────────────────────────
+  function compressImage(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 1200;
+          let {width, height} = img;
+          if (width > height) {
+            if (width > MAX) { height = Math.round(height * MAX / width); width = MAX; }
+          } else {
+            if (height > MAX) { width = Math.round(width * MAX / height); height = MAX; }
+          }
+          const canvas = document.getElementById('compress-canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.60);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ──────────────────────────────────────────────
+  //  CLOUDINARY UPLOAD
+  // ──────────────────────────────────────────────
+  async function uploadToCloudinary(file) {
+    const compressed = await compressImage(file);
+    const formData = new FormData();
+    formData.append('file', compressed, 'moto.jpg');
+    formData.append('upload_preset', cloudinaryConfig.uploadPreset);
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`,
+      { method: 'POST', body: formData }
+    );
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    return data.secure_url;
+  }
+
+  // ──────────────────────────────────────────────
+  //  FOLIO GENERATION
+  // ──────────────────────────────────────────────
+  async function getNextFolio() {
+    const snap = await getDocs(collection(db, 'ordenes'));
+    let max = 0;
+    snap.forEach(d => {
+      const f = d.data().folio || '';
+      const n = parseInt(f.replace('F-',''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    });
+    return `F-${String(max+1).padStart(3,'0')}`;
+  }
+
+  // ──────────────────────────────────────────────
+  //  PHOTO SLOTS PREVIEW
+  // ──────────────────────────────────────────────
+  let photoFiles = [null, null];
+
+  function setupPhotoSlot(n) {
+    const input = document.getElementById(`photo-${n}`);
+    const slot = document.getElementById(`slot-${n}`);
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      photoFiles[n-1] = file;
+      const url = URL.createObjectURL(file);
+      // Clear slot children except input
+      Array.from(slot.children).forEach(c => { if (c !== input) c.remove(); });
+      const img = document.createElement('img');
+      img.src = url;
+      slot.insertBefore(img, input);
+    });
+  }
+
+  function resetOrdenForm() {
+    ['f-marca','f-linea','f-color','f-placas','f-fallas'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    photoFiles = [null, null];
+    [1,2].forEach(n => {
+      const slot = document.getElementById(`slot-${n}`);
+      const input = document.getElementById(`photo-${n}`);
+      slot.innerHTML = '';
+      // Rebuild icon + label + input
+      slot.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Foto ${n}</span>
+        <input type="file" accept="image/*" id="photo-${n}" />
+      `;
+      setupPhotoSlot(n);
+    });
+  }
+
+  function resetCitaForm() {
+    ['c-nombre','c-tel','c-desc'].forEach(id => document.getElementById(id).value = '');
+  }
+
+  // ──────────────────────────────────────────────
+  //  SAVE ORDEN
+  // ──────────────────────────────────────────────
+  document.getElementById('save-orden').addEventListener('click', async () => {
+    const marca = document.getElementById('f-marca').value.trim();
+    const linea = document.getElementById('f-linea').value.trim();
+    const color = document.getElementById('f-color').value.trim();
+    const placas = document.getElementById('f-placas').value.trim().toUpperCase();
+    const fallas = document.getElementById('f-fallas').value.trim();
+
+    if (!marca || !linea || !placas || !fallas) {
+      showToast('Completa los campos requeridos');
+      return;
+    }
+
+    const saveBtn = document.getElementById('save-orden');
+    saveBtn.textContent = 'Guardando…';
+    saveBtn.disabled = true;
+
+    try {
+      const folio = await getNextFolio();
+      const photos = [];
+
+      for (let i = 0; i < 2; i++) {
+        if (photoFiles[i]) {
+          try {
+            const url = await uploadToCloudinary(photoFiles[i]);
+            photos.push(url);
+          } catch(e) {
+            showToast('Error al subir foto ' + (i+1));
+          }
+        }
+      }
+
+      await addDoc(collection(db, 'ordenes'), {
+        folio, marca, linea, color, placas, fallas,
+        photos,
+        createdAt: new Date().toISOString()
+      });
+
+      closeModal('modal-orden');
+      showToast(`Orden ${folio} creada`);
+    } catch(e) {
+      showToast('Error al guardar');
+      console.error(e);
+    } finally {
+      saveBtn.textContent = 'Guardar';
+      saveBtn.disabled = false;
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  //  SAVE CITA
+  // ──────────────────────────────────────────────
+  document.getElementById('save-cita').addEventListener('click', async () => {
+    const nombre = document.getElementById('c-nombre').value.trim();
+    const tel = document.getElementById('c-tel').value.trim();
+    const desc = document.getElementById('c-desc').value.trim();
+
+    if (!nombre || !tel) { showToast('Completa nombre y teléfono'); return; }
+
+    const saveBtn = document.getElementById('save-cita');
+    saveBtn.textContent = 'Guardando…';
+    saveBtn.disabled = true;
+
+    try {
+      await addDoc(collection(db, 'citas'), {
+        nombre, tel, desc,
+        createdAt: new Date().toISOString()
+      });
+      closeModal('modal-cita');
+      showToast('Cita agendada');
+    } catch(e) {
+      showToast('Error al guardar');
+      console.error(e);
+    } finally {
+      saveBtn.textContent = 'Guardar';
+      saveBtn.disabled = false;
+    }
+  });
+
+  // ──────────────────────────────────────────────
+  //  RENDER ORDENES
+  // ──────────────────────────────────────────────
+  function formatDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+    } catch { return iso; }
+  }
+
+  function renderOrdenes(docs) {
+    const list = document.getElementById('ordenes-list');
+    if (docs.length === 0) {
+      list.innerHTML = `
+        <div class="list-empty">
+          <div class="empty-icon">📋</div>
+          <strong>Sin órdenes activas</strong>
+          Toca el botón + para crear la primera.
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = '';
+    docs.forEach(d => {
+      const data = d.data();
+      const photos = data.photos || [];
+      const card = document.createElement('div');
+      card.className = 'order-card';
+
+      const photosHtml = photos.map(url =>
+        `<img class="order-photo" src="${url}" alt="Foto" loading="lazy" />`
+      ).join('');
+
+      card.innerHTML = `
+        <div class="order-card-header">
+          <span class="order-folio">${data.folio || '—'}</span>
+          <span class="order-date">${formatDate(data.createdAt)}</span>
+        </div>
+        <div class="order-card-body">
+          <div class="order-moto">${data.marca || ''} ${data.linea || ''}</div>
+          <div class="order-placa">${data.placas || ''}</div>
+          ${data.color ? `<div style="font-size:13px;color:var(--label3);margin-bottom:6px;">Color: ${data.color}</div>` : ''}
+          <div class="order-fallas">${(data.fallas||'').replace(/\n/g,'<br>')}</div>
+          ${photos.length ? `<div class="order-photos">${photosHtml}</div>` : ''}
+        </div>
+        <div class="order-card-footer">
+          <button class="btn-delete" data-id="${d.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            Eliminar
+          </button>
+        </div>
+      `;
+
+      // Photo viewer
+      card.querySelectorAll('.order-photo').forEach(img => {
+        img.addEventListener('click', () => openImageViewer(img.src));
+      });
+
+      // Delete
+      card.querySelector('.btn-delete').addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        showConfirm(
+          'Eliminar orden',
+          `¿Eliminar la orden ${data.folio}? Esta acción no se puede deshacer.`,
+          async () => {
+            try {
+              await deleteDoc(doc(db, 'ordenes', id));
+              showToast('Orden eliminada');
+            } catch(err) {
+              showToast('Error al eliminar');
+              console.error(err);
+            }
+          }
+        );
+      });
+
+      list.appendChild(card);
+    });
+  }
+
+  // ──────────────────────────────────────────────
+  //  RENDER CITAS
+  // ──────────────────────────────────────────────
+  function getInitials(name) {
+    return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  }
+
+  function renderCitas(docs) {
+    const list = document.getElementById('citas-list');
+    if (docs.length === 0) {
+      list.innerHTML = `
+        <div class="list-empty">
+          <div class="empty-icon">📅</div>
+          <strong>Sin citas programadas</strong>
+          Toca el botón + para agendar una cita.
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = '';
+    docs.forEach(d => {
+      const data = d.data();
+      const card = document.createElement('div');
+      card.className = 'cita-card';
+      card.innerHTML = `
+        <div class="cita-avatar">${getInitials(data.nombre||'?')}</div>
+        <div class="cita-info">
+          <div class="cita-name">${data.nombre||''}</div>
+          <div class="cita-tel">${data.tel||''}</div>
+          ${data.desc ? `<div class="cita-desc">${(data.desc||'').replace(/\n/g,'<br>')}</div>` : ''}
+          <div class="cita-date">${formatDate(data.createdAt)}</div>
+        </div>
+        <div class="cita-card-actions">
+          <button class="btn-delete" data-id="${d.id}" style="padding:6px 0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+          </button>
+        </div>
+      `;
+
+      card.querySelector('.btn-delete').addEventListener('click', () => {
+        showConfirm(
+          'Eliminar cita',
+          `¿Eliminar la cita de ${data.nombre}?`,
+          async () => {
+            try {
+              await deleteDoc(doc(db, 'citas', d.id));
+              showToast('Cita eliminada');
+            } catch(err) {
+              showToast('Error al eliminar');
+            }
+          }
+        );
+      });
+
+      list.appendChild(card);
+    });
+  }
+
+  // ──────────────────────────────────────────────
+  //  CONNECTION STATUS
+  // ──────────────────────────────────────────────
+  function updateConnBadge() {
+    const badge = document.getElementById('conn-badge');
+    if (navigator.onLine) {
+      badge.textContent = 'En línea';
+      badge.className = 'status-badge online';
+    } else {
+      badge.textContent = 'Sin conexión';
+      badge.className = 'status-badge offline';
+    }
+  }
+  window.addEventListener('online', updateConnBadge);
+  window.addEventListener('offline', updateConnBadge);
+  updateConnBadge();
+
+  // ──────────────────────────────────────────────
+  //  LOGOUT
+  // ──────────────────────────────────────────────
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    showConfirm('Cerrar sesión', '¿Deseas bloquear la app con PIN?', () => {
+      localStorage.removeItem('ct_unlocked');
+      appEl.classList.add('hidden');
+      pinScreen.classList.remove('hidden');
+      pinBuffer = '';
+      updateDots();
+      pinErrorEl.textContent = '';
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  //  INIT APP — Firestore listeners
+  // ──────────────────────────────────────────────
+  let unsubOrdenes = null;
+  let unsubCitas = null;
+
+  function initApp() {
+    setupPhotoSlot(1);
+    setupPhotoSlot(2);
+    updateConnBadge();
+
+    // Órdenes listener
+    if (unsubOrdenes) unsubOrdenes();
+    const qOrdenes = query(collection(db, 'ordenes'), orderBy('createdAt', 'desc'));
+    unsubOrdenes = onSnapshot(qOrdenes, snap => {
+      renderOrdenes(snap.docs);
+    }, err => {
+      document.getElementById('ordenes-list').innerHTML =
+        '<div class="list-empty"><strong>Error de conexión</strong>Revisa tu red.</div>';
+      console.error(err);
+    });
+
+    // Citas listener
+    if (unsubCitas) unsubCitas();
+    const qCitas = query(collection(db, 'citas'), orderBy('createdAt', 'desc'));
+    unsubCitas = onSnapshot(qCitas, snap => {
+      renderCitas(snap.docs);
+    }, err => {
+      document.getElementById('citas-list').innerHTML =
+        '<div class="list-empty"><strong>Error de conexión</strong>Revisa tu red.</div>';
+      console.error(err);
+    });
+  }
+</script>
+
+</body>
+</html>
