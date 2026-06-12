@@ -458,6 +458,25 @@
     .tab-content::-webkit-scrollbar,
     .modal-scroll::-webkit-scrollbar { display: none; }
     .tab-content, .modal-scroll { scrollbar-width: none; }
+
+    /* ─── WhatsApp Button ─── */
+    .btn-whatsapp {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #25D366; color: white;
+      border: none; border-radius: 20px;
+      padding: 7px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-whatsapp:active { background: #1ebe5a; transform: scale(0.96); }
+    .btn-whatsapp svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+    /* ─── datetime-local input iOS fix ─── */
+    input[type="datetime-local"] {
+      color-scheme: light;
+    }
   </style>
 </head>
 <body>
@@ -631,6 +650,14 @@
     </div>
     <div class="modal-scroll">
       <div class="form-group">
+        <label class="form-label">Nombre del cliente</label>
+        <input class="form-input" id="f-nombre" placeholder="Nombre completo" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Teléfono</label>
+        <input class="form-input" id="f-tel" type="tel" placeholder="10 dígitos" autocomplete="off" />
+      </div>
+      <div class="form-group">
         <label class="form-label">Marca</label>
         <input class="form-input" id="f-marca" placeholder="Ej. Honda, Yamaha…" autocomplete="off" />
       </div>
@@ -696,6 +723,10 @@
       <div class="form-group">
         <label class="form-label">Descripción</label>
         <textarea class="form-textarea" id="c-desc" placeholder="Motivo de la cita, tipo de servicio…" rows="4"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha y hora de la cita</label>
+        <input class="form-input" id="c-fecha" type="datetime-local" />
       </div>
     </div>
   </div>
@@ -1004,7 +1035,7 @@
   }
 
   function resetOrdenForm() {
-    ['f-marca','f-linea','f-color','f-placas','f-fallas'].forEach(id => {
+    ['f-nombre','f-tel','f-marca','f-linea','f-color','f-placas','f-fallas'].forEach(id => {
       document.getElementById(id).value = '';
     });
     photoFiles = [null, null];
@@ -1026,13 +1057,15 @@
   }
 
   function resetCitaForm() {
-    ['c-nombre','c-tel','c-desc'].forEach(id => document.getElementById(id).value = '');
+    ['c-nombre','c-tel','c-desc','c-fecha'].forEach(id => document.getElementById(id).value = '');
   }
 
   // ──────────────────────────────────────────────
   //  SAVE ORDEN
   // ──────────────────────────────────────────────
   document.getElementById('save-orden').addEventListener('click', async () => {
+    const nombre = document.getElementById('f-nombre').value.trim();
+    const tel = document.getElementById('f-tel').value.trim();
     const marca = document.getElementById('f-marca').value.trim();
     const linea = document.getElementById('f-linea').value.trim();
     const color = document.getElementById('f-color').value.trim();
@@ -1064,7 +1097,7 @@
       }
 
       await addDoc(collection(db, 'ordenes'), {
-        folio, marca, linea, color, placas, fallas,
+        folio, nombre, tel, marca, linea, color, placas, fallas,
         photos,
         createdAt: new Date().toISOString()
       });
@@ -1087,6 +1120,7 @@
     const nombre = document.getElementById('c-nombre').value.trim();
     const tel = document.getElementById('c-tel').value.trim();
     const desc = document.getElementById('c-desc').value.trim();
+    const fecha = document.getElementById('c-fecha').value;
 
     if (!nombre || !tel) { showToast('Completa nombre y teléfono'); return; }
 
@@ -1096,7 +1130,7 @@
 
     try {
       await addDoc(collection(db, 'citas'), {
-        nombre, tel, desc,
+        nombre, tel, desc, fecha,
         createdAt: new Date().toISOString()
       });
       closeModal('modal-cita');
@@ -1144,19 +1178,35 @@
         `<img class="order-photo" src="${url}" alt="Foto" loading="lazy" />`
       ).join('');
 
+      // WhatsApp message for orden
+      const waOrden = data.tel ? encodeURIComponent(
+        `Hola ${data.nombre || 'estimado cliente'} 👋\n\n` +
+        `Te confirmamos que hemos recibido tu motocicleta *${data.marca || ''} ${data.linea || ''}* (Placas: ${data.placas || ''}) en nuestro taller.\n\n` +
+        `📋 *Folio de orden:* ${data.folio || ''}\n` +
+        `🔧 *Trabajo a realizar:* ${data.fallas || ''}\n\n` +
+        `Muchas gracias por tu preferencia y confianza. Te avisaremos en cuanto esté lista. ¡Estamos para servirte! 🙏`
+      ) : null;
+      const waOrdenTel = data.tel ? data.tel.replace(/\D/g,'') : '';
+
       card.innerHTML = `
         <div class="order-card-header">
           <span class="order-folio">${data.folio || '—'}</span>
           <span class="order-date">${formatDate(data.createdAt)}</span>
         </div>
         <div class="order-card-body">
+          ${data.nombre ? `<div style="font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-bottom:2px;">${data.nombre}</div>` : ''}
+          ${data.tel ? `<div style="font-size:13px;color:var(--blue);margin-bottom:8px;">${data.tel}</div>` : ''}
           <div class="order-moto">${data.marca || ''} ${data.linea || ''}</div>
           <div class="order-placa">${data.placas || ''}</div>
           ${data.color ? `<div style="font-size:13px;color:var(--label3);margin-bottom:6px;">Color: ${data.color}</div>` : ''}
           <div class="order-fallas">${(data.fallas||'').replace(/\n/g,'<br>')}</div>
           ${photos.length ? `<div class="order-photos">${photosHtml}</div>` : ''}
         </div>
-        <div class="order-card-footer">
+        <div class="order-card-footer" style="justify-content:space-between;">
+          ${waOrden ? `<a class="btn-whatsapp" href="https://wa.me/52${waOrdenTel}?text=${waOrden}" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.122 1.522 5.861L.057 23.857a.5.5 0 0 0 .614.614l6.011-1.458A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.95 0-3.77-.53-5.328-1.452l-.362-.214-3.742.907.924-3.735-.235-.374A9.963 9.963 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+            WhatsApp
+          </a>` : '<div></div>'}
           <button class="btn-delete" data-id="${d.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
