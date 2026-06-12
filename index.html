@@ -184,6 +184,14 @@
     }
     .list-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
     .list-empty strong { display: block; font-size: 18px; font-weight: 600; color: var(--label2); margin-bottom: 4px; }
+    .retry-btn {
+      margin-top: 16px;
+      background: var(--blue); color: #fff;
+      border: none; border-radius: 20px;
+      padding: 10px 22px; font-size: 15px; font-weight: 600;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .retry-btn:active { opacity: 0.7; }
 
     .order-card {
       background: var(--bg2);
@@ -1419,34 +1427,86 @@
   // ──────────────────────────────────────────────
   let unsubOrdenes = null;
   let unsubCitas = null;
+  const LISTENER_TIMEOUT_MS = 8000;
+
+  // Generic listener with timeout + "Reintentar" fallback.
+  // If Firestore never calls back (bad network, blocked domain,
+  // permission rules, etc.) the spinner won't spin forever.
+  function setupListener(opts) {
+    const listEl = document.getElementById(opts.listElId);
+    const current = opts.getUnsub();
+    if (current) current();
+
+    listEl.innerHTML = '<div class="spinner"></div>';
+
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const u = opts.getUnsub();
+      if (u) u();
+      opts.setUnsub(null);
+      showLoadError(opts, 'Tiempo de espera agotado. Revisa tu conexión.');
+    }, LISTENER_TIMEOUT_MS);
+
+    const q = query(collection(db, opts.collectionName), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      opts.renderFn(snap.docs);
+    }, err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      opts.setUnsub(null);
+      showLoadError(opts, 'Revisa tu conexión o permisos de Firestore.');
+      console.error(err);
+    });
+
+    opts.setUnsub(unsub);
+  }
+
+  function showLoadError(opts, msg) {
+    const listEl = document.getElementById(opts.listElId);
+    listEl.innerHTML = `
+      <div class="list-empty">
+        <div class="empty-icon">⚠️</div>
+        <strong>No se pudo cargar</strong>
+        ${msg}
+        <div><button class="retry-btn">Reintentar</button></div>
+      </div>`;
+    listEl.querySelector('.retry-btn').addEventListener('click', () => setupListener(opts));
+  }
 
   function initApp() {
     setupPhotoSlot(1);
     setupPhotoSlot(2);
     updateConnBadge();
 
-    // Órdenes listener
-    if (unsubOrdenes) unsubOrdenes();
-    const qOrdenes = query(collection(db, 'ordenes'), orderBy('createdAt', 'desc'));
-    unsubOrdenes = onSnapshot(qOrdenes, snap => {
-      renderOrdenes(snap.docs);
-    }, err => {
-      document.getElementById('ordenes-list').innerHTML =
-        '<div class="list-empty"><strong>Error de conexión</strong>Revisa tu red.</div>';
-      console.error(err);
+    setupListener({
+      listElId: 'ordenes-list',
+      collectionName: 'ordenes',
+      renderFn: renderOrdenes,
+      getUnsub: () => unsubOrdenes,
+      setUnsub: u => unsubOrdenes = u
     });
 
-    // Citas listener
-    if (unsubCitas) unsubCitas();
-    const qCitas = query(collection(db, 'citas'), orderBy('createdAt', 'desc'));
-    unsubCitas = onSnapshot(qCitas, snap => {
-      renderCitas(snap.docs);
-    }, err => {
-      document.getElementById('citas-list').innerHTML =
-        '<div class="list-empty"><strong>Error de conexión</strong>Revisa tu red.</div>';
-      console.error(err);
+    setupListener({
+      listElId: 'citas-list',
+      collectionName: 'citas',
+      renderFn: renderCitas,
+      getUnsub: () => unsubCitas,
+      setUnsub: u => unsubCitas = u
     });
   }
+
+  // Retry automatically when connectivity comes back, in case a
+  // listener gave up while the device was offline.
+  window.addEventListener('online', () => {
+    if (!appEl.classList.contains('hidden')) initApp();
+  });
+
 </script>
 
 </body>
