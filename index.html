@@ -1272,12 +1272,16 @@
       ).join('');
 
       // WhatsApp message for orden
+      // Emoji are written as \u{...} escapes (not literal characters) so
+      // they can't be corrupted by file-encoding issues, and we use the
+      // api.whatsapp.com/send endpoint, which handles UTF-8 emoji in the
+      // "text" param more reliably than the wa.me short-link redirect.
       const waOrden = data.tel ? encodeURIComponent(
-        `Hola ${data.nombre || 'estimado cliente'} 👋\n\n` +
+        `Hola ${data.nombre || 'estimado cliente'} \u{1F44B}\n\n` +
         `Te confirmamos que hemos recibido tu motocicleta *${data.marca || ''} ${data.linea || ''}* (Placas: ${data.placas || ''}) en nuestro taller.\n\n` +
-        `📋 *Folio de orden:* ${data.folio || ''}\n` +
-        `🔧 *Trabajo a realizar:* ${data.fallas || ''}\n\n` +
-        `Muchas gracias por tu preferencia y confianza. Te avisaremos en cuanto esté lista. ¡Estamos para servirte! 🙏`
+        `\u{1F4CB} *Folio de orden:* ${data.folio || ''}\n` +
+        `\u{1F527} *Trabajo a realizar:* ${data.fallas || ''}\n\n` +
+        `Muchas gracias por tu preferencia y confianza. Te avisaremos en cuanto esté lista. ¡Estamos para servirte! \u{1F64F}`
       ) : null;
       const waOrdenTel = data.tel ? data.tel.replace(/\D/g,'') : '';
 
@@ -1296,7 +1300,7 @@
           ${photos.length ? `<div class="order-photos">${photosHtml}</div>` : ''}
         </div>
         <div class="order-card-footer" style="justify-content:space-between;">
-          ${waOrden ? `<a class="btn-whatsapp" href="https://wa.me/52${waOrdenTel}?text=${waOrden}" target="_blank" rel="noopener">
+          ${waOrden ? `<a class="btn-whatsapp" href="https://api.whatsapp.com/send?phone=52${waOrdenTel}&text=${waOrden}" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.122 1.522 5.861L.057 23.857a.5.5 0 0 0 .614.614l6.011-1.458A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.95 0-3.77-.53-5.328-1.452l-.362-.214-3.742.907.924-3.735-.235-.374A9.963 9.963 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
             WhatsApp
           </a>` : '<div></div>'}
@@ -1455,17 +1459,24 @@
 
     const q = query(collection(db, opts.collectionName), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, snap => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutId);
+      // Mark as settled only once (clears the loading timeout), but
+      // keep rendering on every future change so new/edited/deleted
+      // docs show up live without needing to reopen the app.
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeoutId);
+      }
       opts.renderFn(snap.docs);
     }, err => {
-      if (settled) return;
+      console.error(err);
+      if (settled) {
+        showToast('Se perdió la conexión con la base de datos');
+        return;
+      }
       settled = true;
       clearTimeout(timeoutId);
       opts.setUnsub(null);
       showLoadError(opts, 'Revisa tu conexión o permisos de Firestore.');
-      console.error(err);
     });
 
     opts.setUnsub(unsub);
