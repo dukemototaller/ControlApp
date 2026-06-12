@@ -682,7 +682,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Placas</label>
-        <input class="form-input" id="f-placas" placeholder="Ej. ABC-123" autocomplete="off" style="text-transform:uppercase;" />
+        <input class="form-input" id="f-placas" placeholder="Ej. ABC-123" autocomplete="off" />
       </div>
       <div class="form-group">
         <label class="form-label">Fallas / Trabajo a realizar</label>
@@ -949,6 +949,25 @@
 
   setupEnterNavigation(['f-nombre','f-tel','f-fecha','f-marca','f-linea','f-color','f-placas','f-fallas']);
   setupEnterNavigation(['c-nombre','c-tel','c-desc','c-fecha']);
+
+  // ──────────────────────────────────────────────
+  //  AUTO-UPPERCASE (marca, línea, color, placas)
+  // ──────────────────────────────────────────────
+  function setupUppercase(fieldIds) {
+    fieldIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        el.value = el.value.toUpperCase();
+        // Restore cursor position (uppercasing doesn't change length)
+        el.setSelectionRange(start, end);
+      });
+    });
+  }
+
+  setupUppercase(['f-marca','f-linea','f-color','f-placas']);
 
   // ──────────────────────────────────────────────
   //  TOAST
