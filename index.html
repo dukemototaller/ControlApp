@@ -473,9 +473,16 @@
     .btn-whatsapp:active { background: #1ebe5a; transform: scale(0.96); }
     .btn-whatsapp svg { width: 15px; height: 15px; flex-shrink: 0; }
 
-    /* ─── datetime-local input iOS fix ─── */
-    input[type="datetime-local"] {
+    /* ─── date input iOS fix ─── */
+    input[type="date"] {
       color-scheme: light;
+    }
+
+    /* ─── Date badge (orden / cita) ─── */
+    .date-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12px; font-weight: 600;
+      color: var(--label3);
     }
   </style>
 </head>
@@ -658,6 +665,10 @@
         <input class="form-input" id="f-tel" type="tel" placeholder="10 dígitos" autocomplete="off" />
       </div>
       <div class="form-group">
+        <label class="form-label">Fecha de la orden</label>
+        <input class="form-input" id="f-fecha" type="date" />
+      </div>
+      <div class="form-group">
         <label class="form-label">Marca</label>
         <input class="form-input" id="f-marca" placeholder="Ej. Honda, Yamaha…" autocomplete="off" />
       </div>
@@ -725,8 +736,8 @@
         <textarea class="form-textarea" id="c-desc" placeholder="Motivo de la cita, tipo de servicio…" rows="4"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">Fecha y hora de la cita</label>
-        <input class="form-input" id="c-fecha" type="datetime-local" />
+        <label class="form-label">Fecha de la cita</label>
+        <input class="form-input" id="c-fecha" type="date" />
       </div>
     </div>
   </div>
@@ -912,6 +923,34 @@
   document.getElementById('cancel-cita').addEventListener('click', () => closeModal('modal-cita'));
 
   // ──────────────────────────────────────────────
+  //  ENTER KEY → JUMP TO NEXT FIELD
+  // ──────────────────────────────────────────────
+  // Pressing "Enter" moves focus to the next field in the list.
+  // Textareas keep their default behavior (insert a line break),
+  // but they still act as a valid "next" target from the field above them.
+  // The last field in the list blurs to dismiss the keyboard.
+  function setupEnterNavigation(fieldIds) {
+    fieldIds.forEach((id, idx) => {
+      const el = document.getElementById(id);
+      if (!el || el.tagName === 'TEXTAREA') return;
+      el.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const next = document.getElementById(fieldIds[idx + 1]);
+        if (next) {
+          next.focus();
+          if (typeof next.select === 'function' && next.type !== 'date') next.select();
+        } else {
+          el.blur();
+        }
+      });
+    });
+  }
+
+  setupEnterNavigation(['f-nombre','f-tel','f-fecha','f-marca','f-linea','f-color','f-placas','f-fallas']);
+  setupEnterNavigation(['c-nombre','c-tel','c-desc','c-fecha']);
+
+  // ──────────────────────────────────────────────
   //  TOAST
   // ──────────────────────────────────────────────
   let toastTimer;
@@ -1038,6 +1077,7 @@
     ['f-nombre','f-tel','f-marca','f-linea','f-color','f-placas','f-fallas'].forEach(id => {
       document.getElementById(id).value = '';
     });
+    document.getElementById('f-fecha').value = todayDateStr();
     photoFiles = [null, null];
     [1,2].forEach(n => {
       const slot = document.getElementById(`slot-${n}`);
@@ -1057,7 +1097,8 @@
   }
 
   function resetCitaForm() {
-    ['c-nombre','c-tel','c-desc','c-fecha'].forEach(id => document.getElementById(id).value = '');
+    ['c-nombre','c-tel','c-desc'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('c-fecha').value = todayDateStr();
   }
 
   // ──────────────────────────────────────────────
@@ -1066,6 +1107,7 @@
   document.getElementById('save-orden').addEventListener('click', async () => {
     const nombre = document.getElementById('f-nombre').value.trim();
     const tel = document.getElementById('f-tel').value.trim();
+    const fecha = document.getElementById('f-fecha').value || todayDateStr();
     const marca = document.getElementById('f-marca').value.trim();
     const linea = document.getElementById('f-linea').value.trim();
     const color = document.getElementById('f-color').value.trim();
@@ -1097,7 +1139,7 @@
       }
 
       await addDoc(collection(db, 'ordenes'), {
-        folio, nombre, tel, marca, linea, color, placas, fallas,
+        folio, nombre, tel, fecha, marca, linea, color, placas, fallas,
         photos,
         createdAt: new Date().toISOString()
       });
@@ -1120,7 +1162,7 @@
     const nombre = document.getElementById('c-nombre').value.trim();
     const tel = document.getElementById('c-tel').value.trim();
     const desc = document.getElementById('c-desc').value.trim();
-    const fecha = document.getElementById('c-fecha').value;
+    const fecha = document.getElementById('c-fecha').value || todayDateStr();
 
     if (!nombre || !tel) { showToast('Completa nombre y teléfono'); return; }
 
@@ -1154,6 +1196,23 @@
       return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
     } catch { return iso; }
   }
+
+  // Formats a "YYYY-MM-DD" (date-only) string without timezone shift.
+  // Also tolerates legacy datetime-local values by taking the date portion.
+  function formatDateOnly(dateStr) {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  // Returns today's date as "YYYY-MM-DD" in the user's local timezone.
+  function todayDateStr() {
+    const d = new Date();
+    const tzOffsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 10);
+  }
+
 
   function renderOrdenes(docs) {
     const list = document.getElementById('ordenes-list');
@@ -1191,7 +1250,7 @@
       card.innerHTML = `
         <div class="order-card-header">
           <span class="order-folio">${data.folio || '—'}</span>
-          <span class="order-date">${formatDate(data.createdAt)}</span>
+          <span class="order-date">${data.fecha ? formatDateOnly(data.fecha) : formatDate(data.createdAt)}</span>
         </div>
         <div class="order-card-body">
           ${data.nombre ? `<div style="font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-bottom:2px;">${data.nombre}</div>` : ''}
@@ -1275,7 +1334,7 @@
           <div class="cita-name">${data.nombre||''}</div>
           <div class="cita-tel">${data.tel||''}</div>
           ${data.desc ? `<div class="cita-desc">${(data.desc||'').replace(/\n/g,'<br>')}</div>` : ''}
-          <div class="cita-date">${formatDate(data.createdAt)}</div>
+          <div class="cita-date">📅 ${formatDateOnly(data.fecha) || formatDate(data.createdAt)}</div>
         </div>
         <div class="cita-card-actions">
           <button class="btn-delete" data-id="${d.id}" style="padding:6px 0;">
